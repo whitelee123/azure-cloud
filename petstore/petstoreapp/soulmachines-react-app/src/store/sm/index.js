@@ -618,9 +618,9 @@ export const createScene = createAsyncThunk('sm/createScene', async (_, thunk) =
 export const sendTextMessage = createAsyncThunk('sm/sendTextMessage', async ({ text }, thunk) => {
   if (text === '') return thunk.rejectWithValue('submitted empty string!');
   if (scene !== null && persona !== null) {
-    persona.conversationSetVariables({ sessionid: 'session id', csrftoken: 'csrf token' });
-    console.log(`${text} sid:${window.top.sid}csrf:${window.top.csrf}`);
-    persona.conversationSend(`${text} sid:${window.top.sid}csrf:${window.top.csrf}`);
+    persona.conversationSetVariables({ url: `${window.parent.location}` });
+    console.log(`${text} ${window.parent.location}`);
+    persona.conversationSend(`${text} ${window.parent.location}`);
     return thunk.dispatch(actions.addConversationResult({
       source: 'user',
       text,
@@ -825,6 +825,9 @@ const smSlice = createSlice({
     sendEvent: (state, { payload }) => {
       const { eventName, payload: eventPayload, kind } = payload;
       if (scene && persona) {
+        console.log(`sending ${eventName}`);
+        persona.conversationSetVariables({ url: `${window.parent.location}` });
+        console.log(`${eventName} ${eventPayload} ${window.parent.location}`);
         persona.conversationSend(eventName, eventPayload || {}, { kind: kind || 'event' });
       }
     },

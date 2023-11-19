@@ -8,10 +8,9 @@ import org.springframework.stereotype.Service;
 import com.chtrembl.petstoreassistant.model.AzurePetStoreSessionInfo;
 import com.chtrembl.petstoreassistant.model.DPResponse;
 
-import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
+import okhttp3.Response;
 
 @Service
 public class AzurePetStore implements IAzurePetStore {
@@ -20,28 +19,28 @@ public class AzurePetStore implements IAzurePetStore {
         @Autowired
         private ICosmosDB cosmosDB;
 
-        // investigate why Web Client wasnt working
+        // investigate why POST with FORM URL ENCODING wasnt working with Azure Pet Store, the Content-Type is getting dropped in all client libraries
+        // GET is the hack for POC purposes
         private OkHttpClient client = new OkHttpClient().newBuilder().build();
 
         private String UPDATE_CART_URL = "https://azurepetstore.com/api/updatecart";
+        private String VIEW_CART_URL = "https://azurepetstore.com/api/viewcart";
+        private String COMPLETE_CART_URL = "https://azurepetstore.com/api/completecart";
 
         @Override
         public DPResponse updateCart(AzurePetStoreSessionInfo azurePetStoreSessionInfo, String productId) {
                 DPResponse dpResponse = new DPResponse();
 
                 try {
-
-                        MediaType mediaType = MediaType.parse("application/x-www-form-urlencoded");
-                        RequestBody body = RequestBody.create(mediaType,
-                                        "_csrf=" + azurePetStoreSessionInfo.getCsrfToken() + "&productId=" + productId);
                         Request request = new Request.Builder()
-                                        .url(this.UPDATE_CART_URL)
-                                        .method("POST", body)
+                                        .url(this.UPDATE_CART_URL + "?csrf=" + azurePetStoreSessionInfo.getCsrfToken()
+                                                        + "&productId=" + productId)
+                                        .method("GET", null)
                                         .addHeader("Cookie", "JSESSIONID=" + azurePetStoreSessionInfo.getSessionID())
-                                        .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                                        .addHeader("Content-Type", "text/html")
                                         .build();
 
-                        client.newCall(request).execute();
+                        this.client.newCall(request).execute();
 
                         LOGGER.info("Updated cart with product id: " + productId + " for session id: "
                                         + azurePetStoreSessionInfo.getSessionID() + " csrf: "
@@ -49,7 +48,7 @@ public class AzurePetStore implements IAzurePetStore {
 
                         dpResponse.setDpResponseText("I just added the "
                                         + this.cosmosDB.getCachedProducts().get(productId).getName()
-                                        + " to your cart. "+azurePetStoreSessionInfo.getSessionID()+"|"+azurePetStoreSessionInfo.getCsrfToken());
+                                        + " to your cart.");
 
                         dpResponse.setUpdateCart(true);
                 } catch (Exception e) {
@@ -57,7 +56,40 @@ public class AzurePetStore implements IAzurePetStore {
                                         + azurePetStoreSessionInfo.getSessionID() + " " + e.getMessage());
                         dpResponse.setDpResponseText("I'm sorry, I wasn't able to add the "
                                         + this.cosmosDB.getCachedProducts().get(productId).getName()
-                                        + " to your cart. "+azurePetStoreSessionInfo.getSessionID()+"|"+azurePetStoreSessionInfo.getCsrfToken());
+                                        + " to your cart. " + azurePetStoreSessionInfo.getSessionID() + "|"
+                                        + azurePetStoreSessionInfo.getCsrfToken());
+                }
+
+                return dpResponse;
+        }
+
+        @Override
+        public DPResponse viewCart(AzurePetStoreSessionInfo azurePetStoreSessionInfo) {
+                DPResponse dpResponse = new DPResponse();
+
+                try {
+                        Request request = new Request.Builder()
+                                        .url(this.VIEW_CART_URL)
+                                        .method("GET", null)
+                                        .addHeader("Cookie", "JSESSIONID=" + azurePetStoreSessionInfo.getSessionID())
+                                        .addHeader("Content-Type", "text/html")
+                                        .build();
+
+                        Response response = this.client.newCall(request).execute();
+
+                        LOGGER.info("Retrieved cart items for session id: "
+                                        + azurePetStoreSessionInfo.getSessionID() + " csrf: "
+                                        + azurePetStoreSessionInfo.getCsrfToken());
+
+                        dpResponse.setDpResponseText(response.body().string());
+
+                        dpResponse.setUpdateCart(true);
+                } catch (Exception e) {
+                        LOGGER.error("Error retrieving cart items for session id: "
+                                        + azurePetStoreSessionInfo.getSessionID() + " " + e.getMessage());
+                        dpResponse.setDpResponseText("I'm sorry, I wasn't able to retrieve your shopping cart. "
+                                        + azurePetStoreSessionInfo.getSessionID() + "|"
+                                        + azurePetStoreSessionInfo.getCsrfToken());
                 }
 
                 return dpResponse;
@@ -65,8 +97,34 @@ public class AzurePetStore implements IAzurePetStore {
 
         @Override
         public DPResponse completeCart(AzurePetStoreSessionInfo azurePetStoreSessionInfo) {
-                // TODO Auto-generated method stub
-                throw new UnsupportedOperationException("Unimplemented method 'completeCart'");
+                DPResponse dpResponse = new DPResponse();
+
+                try {
+                        Request request = new Request.Builder()
+                                        .url(this.COMPLETE_CART_URL + "?csrf=" + azurePetStoreSessionInfo.getCsrfToken())
+                                        .method("GET", null)
+                                        .addHeader("Cookie", "JSESSIONID=" + azurePetStoreSessionInfo.getSessionID())
+                                        .addHeader("Content-Type", "text/html")
+                                        .build();
+
+                        Response response = this.client.newCall(request).execute();
+
+                        LOGGER.info("Completed cart for session id: "
+                                        + azurePetStoreSessionInfo.getSessionID() + " csrf: "
+                                        + azurePetStoreSessionInfo.getCsrfToken());
+
+                        dpResponse.setDpResponseText(response.body().string());
+
+                        dpResponse.setCompleteCart(true);
+                } catch (Exception e) {
+                        LOGGER.error("Error completing cart for session id: "
+                                        + azurePetStoreSessionInfo.getSessionID() + " " + e.getMessage());
+                        dpResponse.setDpResponseText("I'm sorry, I wasn't able to place your order. "
+                                        + azurePetStoreSessionInfo.getSessionID() + "|"
+                                        + azurePetStoreSessionInfo.getCsrfToken());
+                }
+
+                return dpResponse;
         }
 
 }

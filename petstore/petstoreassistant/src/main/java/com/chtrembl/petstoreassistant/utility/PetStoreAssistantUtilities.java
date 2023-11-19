@@ -60,6 +60,18 @@ public class PetStoreAssistantUtilities {
             dpResponse.setResponseProductIDs(productIDs);
         }
         
+        // this should become a content card with a carousel of product(s) for now just display description if there is 1 product and override the stuff above
+        if(productIDs.size() == 1)
+        {
+             dpResponseText = "Here is a little information on the " + products.get(productIDs.get(0)).getName() + " " + products.get(productIDs.get(0)).getDescription();
+             dpResponse.setDpResponseText(dpResponseText);
+        }
+        else
+        {
+            // else display the raw AOAI response from our cog search index
+            dpResponseText = text;
+        }
+
         return dpResponse;
     }
 
@@ -71,16 +83,16 @@ public class PetStoreAssistantUtilities {
     public static AzurePetStoreSessionInfo getAzurePetStoreSessionInfo(String text) {
         AzurePetStoreSessionInfo azurePetStoreSessionInfo = null;
 
-        Pattern pattern = Pattern.compile("sid:(.*)csrf:(.*)");
+        Pattern pattern = Pattern.compile("sid=(.*)&csrf=(.*)");
         Matcher matcher = pattern.matcher(text);
         if (matcher.find()) {
             String sessionID = matcher.group(1);
             String csrfToken = matcher.group(2);
-            String newText = text.substring(0, text.indexOf("sid:")).trim();
+            String newText = text.substring(0, text.indexOf("http")).trim();
             azurePetStoreSessionInfo = new AzurePetStoreSessionInfo(sessionID, csrfToken, newText);
             LOGGER.info("Found session id:" + sessionID + " and csrf token:" + csrfToken + " in text: " + text + " new text: " + newText);
         } else {
-            LOGGER.info("No session id or csrf token found in text: " + text);
+            LOGGER.info("No new session id or csrf token found in text: " + text);
         }
         
         return azurePetStoreSessionInfo;
